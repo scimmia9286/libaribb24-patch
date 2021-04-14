@@ -1,0 +1,55 @@
+--- ffmpeg-4.3.2.orig/libavcodec/libaribb24.c	2020-07-09 18:17:46.000000000 +0900
++++ ffmpeg-4.3.2/libavcodec/libaribb24.c	2021-04-14 04:43:19.197164775 +0900
+@@ -211,6 +211,7 @@ static int libaribb24_handle_regions(AVC
+     unsigned int profile_font_size = get_profile_font_size(avctx->profile);
+     AVBPrint buf = { 0 };
+     int ret = 0;
++    int prev_bottom = INT_MIN;
+ 
+     av_bprint_init(&buf, 0, AV_BPRINT_SIZE_UNLIMITED);
+ 
+@@ -258,6 +259,12 @@ static int libaribb24_handle_regions(AVC
+ 
+         // TODO: positioning
+ 
++        // When the "character-bottom" is changed, the next dialogue is
++        // displayed after a line break.
++        if (prev_bottom != INT_MIN && prev_bottom != region->i_charbottom)
++            av_bprintf(&buf, "\\N");
++        prev_bottom = region->i_charbottom;
++
+         av_bprint_append_data(&buf, region->p_start, region_length);
+ 
+         av_bprintf(&buf, "{\\r}");
+@@ -314,6 +321,16 @@ static int libaribb24_decode(AVCodecCont
+         return AVERROR(ENOMEM);
+     }
+ 
++    // Must be initialized before calling the "arib_decode_buffer()" function
++    switch (avctx->profile) {
++    case FF_PROFILE_ARIB_PROFILE_A:
++        arib_initialize_decoder_a_profile((arib_decoder_t *)(b24->decoder));
++        break;
++    case FF_PROFILE_ARIB_PROFILE_C:
++        arib_initialize_decoder_c_profile((arib_decoder_t *)(b24->decoder));
++        break;
++    }
++
+     decoded_subtitle_size = arib_decode_buffer(b24->decoder,
+                                                parsed_data,
+                                                parsed_data_size,
+@@ -322,6 +339,14 @@ static int libaribb24_decode(AVCodecCont
+ 
+     subtitle_duration = arib_decoder_get_time(b24->decoder);
+ 
++    // TODO:
++    //   If "subtitle_duration=0", it means that the screen must be cleared
++    //   before the next dialogue is displayed.
++    //   However, the duration cannot be calculated at this function,
++    //   we decided to use a value that does not fail in our experience.
++    if (subtitle_duration == 0)
++        subtitle_duration = 4*1000000; // 4 sec
++
+     if (avctx->pkt_timebase.num && pkt->pts != AV_NOPTS_VALUE)
+         sub->pts = av_rescale_q(pkt->pts,
+                                 avctx->pkt_timebase, AV_TIME_BASE_Q);
