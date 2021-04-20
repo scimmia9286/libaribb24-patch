@@ -1,5 +1,5 @@
 --- ffmpeg-4.4.orig/libavcodec/libaribb24.c	2020-07-09 18:17:46.000000000 +0900
-+++ ffmpeg-4.4/libavcodec/libaribb24.c	2021-04-20 13:36:59.115393275 +0900
++++ ffmpeg-4.4/libavcodec/libaribb24.c	2021-04-21 00:46:07.757623285 +0900
 @@ -107,7 +107,7 @@ static int libaribb24_generate_ass_heade
               "%d,%d,%d,0,"          /* Bold, Italic, Underline, StrikeOut */
               "100,100,"             /* Scale{X,Y} */
@@ -27,7 +27,7 @@
      AVBPrint buf = { 0 };
      int ret = 0;
 +    int left_origin = INT_MAX, prev_bottom = INT_MIN;
-+    int i, position_move;
++    int position_move;
  
      av_bprint_init(&buf, 0, AV_BPRINT_SIZE_UNLIMITED);
  
@@ -48,25 +48,29 @@
      while (region) {
          ptrdiff_t region_length = region->p_end - region->p_start;
          unsigned int ruby_region =
-@@ -233,6 +250,27 @@ static int libaribb24_handle_regions(AVC
+@@ -233,6 +250,31 @@ static int libaribb24_handle_regions(AVC
              goto next_region;
          }
  
++        // virtical positioning
 +        if (prev_bottom == INT_MIN) {
 +            av_bprintf(&buf, "{\\an7}{\\pos(%d,%d)}",
 +                left_origin, region->i_charbottom - profile_font_size);
 +        }
 +        else if (prev_bottom != region->i_charbottom) {
-+            position_move = (region->i_charbottom - prev_bottom) / profile_font_size;
-+            for (i = 0; i < position_move; i++) {
-+                av_bprintf(&buf, " \\N");
-+            }
++            position_move = region->i_charbottom - prev_bottom;
++            av_bprintf(&buf, " \\N");
++            position_move -= profile_font_size;
++            if (position_move > 0)
++                av_bprintf(&buf, "{\\fscy%"PRId64"} \\N{\\r}",
++                    av_rescale(position_move, 100, profile_font_size));
 +        }
 +
++        // horizontal positioning
 +        if (prev_bottom != region->i_charbottom) {
 +            position_move = region->i_charleft - left_origin;
 +            if (position_move > 0) {
-+                char ideographic_space[] = {0xe3,0x80,0x80,0x00};
++                const char ideographic_space[] = {0xe3,0x80,0x80,0x00};
 +                av_bprintf(&buf, "{\\fscx%"PRId64"}%s{\\r}",
 +                        av_rescale(position_move, 100, profile_font_size),
 +                        ideographic_space);
@@ -76,7 +80,7 @@
          // color and alpha
          if (foreground_bgr_color != ASS_DEFAULT_COLOR)
              av_bprintf(&buf, "{\\1c&H%06x&}", foreground_bgr_color);
-@@ -256,12 +294,13 @@ static int libaribb24_handle_regions(AVC
+@@ -256,12 +298,13 @@ static int libaribb24_handle_regions(AVC
                                    profile_font_size));
          }
  
@@ -91,7 +95,7 @@
  next_region:
          region = region->p_next;
      }
-@@ -314,6 +353,16 @@ static int libaribb24_decode(AVCodecCont
+@@ -314,6 +357,16 @@ static int libaribb24_decode(AVCodecCont
          return AVERROR(ENOMEM);
      }
  
