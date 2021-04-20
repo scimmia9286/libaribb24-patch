@@ -1,6 +1,5 @@
-diff -uprN ffmpeg-4.4.orig/libavcodec/libaribb24.c ffmpeg-4.4/libavcodec/libaribb24.c
 --- ffmpeg-4.4.orig/libavcodec/libaribb24.c	2020-07-09 18:17:46.000000000 +0900
-+++ ffmpeg-4.4/libavcodec/libaribb24.c	2021-04-20 12:48:10.948473485 +0900
++++ ffmpeg-4.4/libavcodec/libaribb24.c	2021-04-20 13:36:59.115393275 +0900
 @@ -107,7 +107,7 @@ static int libaribb24_generate_ass_heade
               "%d,%d,%d,0,"          /* Bold, Italic, Underline, StrikeOut */
               "100,100,"             /* Scale{X,Y} */
@@ -49,7 +48,7 @@ diff -uprN ffmpeg-4.4.orig/libavcodec/libaribb24.c ffmpeg-4.4/libavcodec/libarib
      while (region) {
          ptrdiff_t region_length = region->p_end - region->p_start;
          unsigned int ruby_region =
-@@ -233,6 +250,25 @@ static int libaribb24_handle_regions(AVC
+@@ -233,6 +250,27 @@ static int libaribb24_handle_regions(AVC
              goto next_region;
          }
  
@@ -67,15 +66,17 @@ diff -uprN ffmpeg-4.4.orig/libavcodec/libaribb24.c ffmpeg-4.4/libavcodec/libarib
 +        if (prev_bottom != region->i_charbottom) {
 +            position_move = region->i_charleft - left_origin;
 +            if (position_move > 0) {
-+                av_bprintf(&buf, "{\\fscx%"PRId64"}　{\\r}",
-+                        av_rescale(position_move, 100, profile_font_size));
++                char ideographic_space[] = {0xe3,0x80,0x80,0x00};
++                av_bprintf(&buf, "{\\fscx%"PRId64"}%s{\\r}",
++                        av_rescale(position_move, 100, profile_font_size),
++                        ideographic_space);
 +            }
 +        }
 +
          // color and alpha
          if (foreground_bgr_color != ASS_DEFAULT_COLOR)
              av_bprintf(&buf, "{\\1c&H%06x&}", foreground_bgr_color);
-@@ -256,12 +292,13 @@ static int libaribb24_handle_regions(AVC
+@@ -256,12 +294,13 @@ static int libaribb24_handle_regions(AVC
                                    profile_font_size));
          }
  
@@ -90,7 +91,7 @@ diff -uprN ffmpeg-4.4.orig/libavcodec/libaribb24.c ffmpeg-4.4/libavcodec/libarib
  next_region:
          region = region->p_next;
      }
-@@ -314,6 +351,16 @@ static int libaribb24_decode(AVCodecCont
+@@ -314,6 +353,16 @@ static int libaribb24_decode(AVCodecCont
          return AVERROR(ENOMEM);
      }
  
