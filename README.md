@@ -1,22 +1,17 @@
 # libaribb24-patch
 
 ## 概要
-このリポジトリには2つのパッチをアップロードしました。
-1. ffmpegのモジュールである[FFmpeg/libavcodec/libaribb24.c](https://github.com/FFmpeg/FFmpeg/blob/master/libavcodec/libaribb24.c)用のパッチ
-2. libaribb24の内部で使用されているデコーダ[aribb24/src/decoder.c](https://github.com/nkoriyama/aribb24/blob/master/src/decoder.c)用のパッチ
+FFmpegでARIB STD-B24字幕をデコードすると、字幕の文字サイズや色がおかしくなったり画面からはみ出したりするなど、少し不満がありました。
+これを少しでも改善しようと色々と試行錯誤した結果をパッチとして公開します。
 
-## 改善内容
-1. 字幕のdurationを*ほぼ*実用範囲の値で出力するため、ffmpegに-fix_sub_durationを指定しなくても良くなる
-2. スタイル付きの字幕(ass/ssaなど)を出力した際のスタイル崩れを改善
-3. 字幕の画面からのはみ出しを調整
+## 修正内容
+1. FFmpegのARIB STD-B24字幕デコード処理の不具合修正
+2. ASSヘッダーのfontname, outline, shadowの設定を変更
+3. 字幕の表示位置を再現
+
+## FFmpeg実行時の注意点
+FFmpegを用いてARIB字幕を扱う場合は必ず **-fix_sub_duration** オプションを指定してください
 
 ## 動作検証バージョン
-ffmpeg-4.3.2
-
-## 備考
-aribb24デコーダのパッチは字幕スタイルの調整を目的としたものです。
-必要な場合はパッチを適用して見てください。
-
-### aribb24の修正概要
-aribb２４デコーダはarib-b24仕様で定義されている<MSZ>(Middle Size)文字を通常文字の50%幅で処理しています。
-これでは表示に違和感があったため80%幅に調整しました。
+- ffmpeg-4.3.2
+- ffmpeg-4.4
