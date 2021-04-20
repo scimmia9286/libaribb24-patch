@@ -1,27 +1,96 @@
---- ffmpeg-4.3.2.orig/libavcodec/libaribb24.c	2020-07-09 18:17:46.000000000 +0900
-+++ ffmpeg-4.3.2/libavcodec/libaribb24.c	2021-04-14 04:43:19.197164775 +0900
-@@ -211,6 +211,7 @@ static int libaribb24_handle_regions(AVC
+diff -uprN ffmpeg-4.4.orig/libavcodec/libaribb24.c ffmpeg-4.4/libavcodec/libaribb24.c
+--- ffmpeg-4.4.orig/libavcodec/libaribb24.c	2020-07-09 18:17:46.000000000 +0900
++++ ffmpeg-4.4/libavcodec/libaribb24.c	2021-04-20 12:48:10.948473485 +0900
+@@ -107,7 +107,7 @@ static int libaribb24_generate_ass_heade
+              "%d,%d,%d,0,"          /* Bold, Italic, Underline, StrikeOut */
+              "100,100,"             /* Scale{X,Y} */
+              "0,0,"                 /* Spacing, Angle */
+-             "%d,1,0,"              /* BorderStyle, Outline, Shadow */
++             "%d,0,1,"              /* BorderStyle, Outline, Shadow */
+              "%d,10,10,10,"         /* Alignment, Margin[LRV] */
+              "0\r\n"                /* Encoding */
+ 
+@@ -116,7 +116,7 @@ static int libaribb24_generate_ass_heade
+              "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\r\n",
+              !(avctx->flags & AV_CODEC_FLAG_BITEXACT) ? AV_STRINGIFY(LIBAVCODEC_VERSION) : "",
+              plane_width, plane_height,
+-             ASS_DEFAULT_FONT, font_size, ASS_DEFAULT_COLOR,
++             "HiraMaruProN-W4", font_size, ASS_DEFAULT_COLOR,
+              ASS_DEFAULT_COLOR, ASS_DEFAULT_BACK_COLOR, ASS_DEFAULT_BACK_COLOR,
+              -ASS_DEFAULT_BOLD, -ASS_DEFAULT_ITALIC, -ASS_DEFAULT_UNDERLINE,
+              ASS_DEFAULT_BORDERSTYLE, ASS_DEFAULT_ALIGNMENT);
+@@ -208,12 +208,29 @@ static int libaribb24_handle_regions(AVC
+ {
+     Libaribb24Context *b24 = avctx->priv_data;
+     const arib_buf_region_t *region = arib_decoder_get_regions(b24->decoder);
++    const arib_buf_region_t *region_search = region;
      unsigned int profile_font_size = get_profile_font_size(avctx->profile);
      AVBPrint buf = { 0 };
      int ret = 0;
-+    int prev_bottom = INT_MIN;
++    int left_origin = INT_MAX, prev_bottom = INT_MIN;
++    int i, position_move;
  
      av_bprint_init(&buf, 0, AV_BPRINT_SIZE_UNLIMITED);
  
-@@ -258,6 +259,12 @@ static int libaribb24_handle_regions(AVC
- 
-         // TODO: positioning
- 
-+        // When the "character-bottom" is changed, the next dialogue is
-+        // displayed after a line break.
-+        if (prev_bottom != INT_MIN && prev_bottom != region->i_charbottom)
-+            av_bprintf(&buf, "\\N");
-+        prev_bottom = region->i_charbottom;
++    // Search the leftmost position
++    while (region_search) {
++        ptrdiff_t region_length = region_search->p_end - region->p_start;
++        unsigned int ruby_region =
++            region_search->i_fontheight == (profile_font_size / 2);
 +
++        if (region_length == 0 || (ruby_region && b24->aribb24_skip_ruby)) {
++        }
++        else {
++            left_origin = FFMIN(left_origin, region_search->i_charleft);
++        }
++        region_search = region_search->p_next;
++    }
++
+     while (region) {
+         ptrdiff_t region_length = region->p_end - region->p_start;
+         unsigned int ruby_region =
+@@ -233,6 +250,25 @@ static int libaribb24_handle_regions(AVC
+             goto next_region;
+         }
+ 
++        if (prev_bottom == INT_MIN) {
++            av_bprintf(&buf, "{\\an7}{\\pos(%d,%d)}",
++                left_origin, region->i_charbottom - profile_font_size);
++        }
++        else if (prev_bottom != region->i_charbottom) {
++            position_move = (region->i_charbottom - prev_bottom) / profile_font_size;
++            for (i = 0; i < position_move; i++) {
++                av_bprintf(&buf, " \\N");
++            }
++        }
++
++        if (prev_bottom != region->i_charbottom) {
++            position_move = region->i_charleft - left_origin;
++            if (position_move > 0) {
++                av_bprintf(&buf, "{\\fscx%"PRId64"}　{\\r}",
++                        av_rescale(position_move, 100, profile_font_size));
++            }
++        }
++
+         // color and alpha
+         if (foreground_bgr_color != ASS_DEFAULT_COLOR)
+             av_bprintf(&buf, "{\\1c&H%06x&}", foreground_bgr_color);
+@@ -256,12 +292,13 @@ static int libaribb24_handle_regions(AVC
+                                   profile_font_size));
+         }
+ 
+-        // TODO: positioning
+ 
          av_bprint_append_data(&buf, region->p_start, region_length);
  
          av_bprintf(&buf, "{\\r}");
-@@ -314,6 +321,16 @@ static int libaribb24_decode(AVCodecCont
+ 
++        prev_bottom = region->i_charbottom;
++
+ next_region:
+         region = region->p_next;
+     }
+@@ -314,6 +351,16 @@ static int libaribb24_decode(AVCodecCont
          return AVERROR(ENOMEM);
      }
  
@@ -38,18 +107,3 @@
      decoded_subtitle_size = arib_decode_buffer(b24->decoder,
                                                 parsed_data,
                                                 parsed_data_size,
-@@ -322,6 +339,14 @@ static int libaribb24_decode(AVCodecCont
- 
-     subtitle_duration = arib_decoder_get_time(b24->decoder);
- 
-+    // TODO:
-+    //   If "subtitle_duration=0", it means that the screen must be cleared
-+    //   before the next dialogue is displayed.
-+    //   However, the duration cannot be calculated at this function,
-+    //   we decided to use a value that does not fail in our experience.
-+    if (subtitle_duration == 0)
-+        subtitle_duration = 4*1000000; // 4 sec
-+
-     if (avctx->pkt_timebase.num && pkt->pts != AV_NOPTS_VALUE)
-         sub->pts = av_rescale_q(pkt->pts,
-                                 avctx->pkt_timebase, AV_TIME_BASE_Q);
