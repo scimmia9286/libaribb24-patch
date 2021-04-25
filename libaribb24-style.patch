@@ -1,0 +1,20 @@
+--- ffmpeg-4.4.orig/libavcodec/libaribb24.c	2020-07-09 18:17:46.000000000 +0900
++++ ffmpeg-4.4/libavcodec/libaribb24.c	2021-04-25 15:23:35.159691179 +0900
+@@ -105,7 +105,7 @@ static int libaribb24_generate_ass_heade
+              "%s,%d,"               /* Font{name,size} */
+              "&H%x,&H%x,&H%x,&H%x," /* {Primary,Secondary,Outline,Back}Colour */
+              "%d,%d,%d,0,"          /* Bold, Italic, Underline, StrikeOut */
+-             "100,100,"             /* Scale{X,Y} */
++             "80,100,"              /* Scale{X,Y} */
+              "0,0,"                 /* Spacing, Angle */
+              "%d,1,0,"              /* BorderStyle, Outline, Shadow */
+              "%d,10,10,10,"         /* Alignment, Margin[LRV] */
+@@ -116,7 +116,7 @@ static int libaribb24_generate_ass_heade
+              "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\r\n",
+              !(avctx->flags & AV_CODEC_FLAG_BITEXACT) ? AV_STRINGIFY(LIBAVCODEC_VERSION) : "",
+              plane_width, plane_height,
+-             ASS_DEFAULT_FONT, font_size, ASS_DEFAULT_COLOR,
++             "ARIB Maru Gothic Regular", font_size, ASS_DEFAULT_COLOR,
+              ASS_DEFAULT_COLOR, ASS_DEFAULT_BACK_COLOR, ASS_DEFAULT_BACK_COLOR,
+              -ASS_DEFAULT_BOLD, -ASS_DEFAULT_ITALIC, -ASS_DEFAULT_UNDERLINE,
+              ASS_DEFAULT_BORDERSTYLE, ASS_DEFAULT_ALIGNMENT);
